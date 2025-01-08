@@ -49,7 +49,7 @@ Les résultats de l'analyse sont affichés directement dans la console, avec des
 Exemple
 
 ./analyse.sh example.tiff
-
+![Exemple de résultat](example.png)
 Structure du projet
 
     analyse_tiff.py : Le script Python principal pour l'analyse des fichiers TIFF.
