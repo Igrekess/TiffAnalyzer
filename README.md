@@ -1,6 +1,9 @@
 # TiffAnalyzer
 
 TiffAnalyzer est un outil rapidement conçu suite à un problème rencontré par un client pour analyser des fichiers TIFF et détecter des anomalies telles que les corruptions de données, les glitches horizontaux ou verticaux, et d'autres problèmes potentiels et tenter de déterminer leurs origines. Il combine un script Python pour l'analyse des fichiers avec un script Bash facilitant l'installation et l'exécution dans un environnement virtuel. Ce projet est en cours de développement, aucune garantie sur la validité des résultats n'est fournis à ce stade (mais pour moi ça a fonctionné pour trier les tiffs corrompues des autres, et déterminer l'origine du problème).
+Les seuils de détections ne sont probablement pas universels, je travaille à une méthode dynamique des seuils.
+
+
 
 ## Fonctionnalités
 - Analyse détaillée des fichiers TIFF pour valider leur intégrité.
