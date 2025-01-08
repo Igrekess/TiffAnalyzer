@@ -33,7 +33,7 @@ TiffAnalyzer est un outil conçu pour analyser des fichiers TIFF et détecter de
 Pour analyser un fichier TIFF, exécutez simplement le script Bash :
 ```bash
 ./analyse.sh <chemin-vers-le-fichier.tiff>
-
+ ```
 Le script :
 
     Vérifie l'existence et le format du fichier.
