@@ -16,7 +16,7 @@ TiffAnalyzer est un outil rapidement conçu suite à un problème rencontré par
 ## Installation
 1. Clonez ce dépôt :
     ```bash
-    git clone https://github.com/votre-utilisateur/tiffanalyzer.git
+    git clone https://github.com/Igrekess/tiffanalyzer.git
     cd tiffanalyzer
     ```
 
