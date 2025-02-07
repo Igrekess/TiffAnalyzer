@@ -1,8 +1,6 @@
-# TIFF Analysis Tool
+# TIFF Experimental Analysis Tool
 
 TIFF Analysis Tool is a Python-based application designed to detect and analyze glitches (unexpected anomalies or corruptions) in TIFF images. The tool extracts metadata, computes pixel brightness (luminance), detects abnormal changes (glitches) along rows and columns, groups these anomalies, and then uses a series of heuristics to suggest the probable origin of the corruption.
-
-This README explains each function, its purpose, and the logic behind it—in language accessible to beginners—and provides sources for the chosen methods and values.
 
 ---
 
@@ -38,7 +36,7 @@ The tool processes a TIFF image in several stages:
 
 ---
 
-## Function-by-Function Explanation with Sources
+## Function-by-Function Explanation
 
 ### get_tiff_info
 
