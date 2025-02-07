@@ -264,7 +264,6 @@ Here is the list of additional command line options and their functions:
 **Example:** `--dynamic`
 
 ---
----
 
 ## Glitch Identification Strategies and Heuristics
 
