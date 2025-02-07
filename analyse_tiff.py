@@ -5,7 +5,7 @@ TIFF Analysis Tool
 Analyzes TIFF images for potential corruption patterns and glitches.
 Detection thresholds can be modified via command-line parameters.
 Use the "--dynamic" flag to compute thresholds dynamically.
-The glitch analysis has been enhanced to help determine the probable origin.
+If glitches are detected, heatmaps highlighting glitch regions will be generated.
 """
 
 import os
@@ -28,7 +28,7 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 # --- Default Constants for detection thresholds (used when --dynamic is NOT specified) ---
 BASE_THRESHOLD_FACTOR: float = 0.15
 LOCAL_THRESHOLD_STD_FACTOR: float = 0.5
-ANOMALY_RATIO_THRESHOLD: float = 0.4
+ANOMALY_RATIO_THRESHOLD: float = 0.3
 SIGNIFICANCE_MULTIPLIER: float = 2.0
 GROUP_SEVERITY_MULTIPLIER: float = 3.0
 MAX_GROUP_SIZE: int = 20
@@ -46,6 +46,10 @@ def compute_dynamic_thresholds(luminance: np.ndarray, axis: int) -> Dict[str, fl
     :param luminance: 2D array of image luminance.
     :param axis: Axis along which to compute differences (0 for rows, 1 for columns).
     :return: A dictionary containing dynamic thresholds.
+    
+    The function computes the absolute differences between adjacent pixels
+    and uses, for example, the 90th percentile of these differences as the base threshold.
+    This approach is inspired by adaptive thresholding methods such as Otsu's method.
     """
     if axis == 0:
         diffs = np.abs(luminance[1:, :] - luminance[:-1, :])
@@ -53,8 +57,7 @@ def compute_dynamic_thresholds(luminance: np.ndarray, axis: int) -> Dict[str, fl
         diffs = np.abs(luminance[:, 1:] - luminance[:, :-1])
     
     flat_diffs = diffs.flatten()
-    # For example, use the 90th percentile as a base threshold.
-    dynamic_base_threshold = np.percentile(flat_diffs, 90)
+    dynamic_base_threshold = np.percentile(flat_diffs, 95)
     dynamic_std = np.std(flat_diffs)
     
     return {
@@ -65,6 +68,12 @@ def compute_dynamic_thresholds(luminance: np.ndarray, axis: int) -> Dict[str, fl
 def get_tiff_info(img: Image.Image) -> Dict[str, Any]:
     """
     Extract detailed information from a TIFF image.
+    
+    This function retrieves basic metadata such as format, mode, dimensions,
+    as well as TIFF-specific tags like BitsPerSample, Compression, PhotometricInterpretation, and DPI.
+    
+    Source: Adobe TIFF Specification:
+    https://www.adobe.io/open/standards/TIFF.html
     """
     info: Dict[str, Any] = {}
     try:
@@ -73,9 +82,9 @@ def get_tiff_info(img: Image.Image) -> Dict[str, Any]:
         info['size'] = img.size
         if hasattr(img, 'tag'):
             tags = img.tag
-            if 258 in tags:  # BitsPerSample
+            if 258 in tags:
                 info['bits_per_sample'] = tags[258]
-            if 259 in tags:  # Compression
+            if 259 in tags:
                 compression_codes = {
                     1: "Uncompressed",
                     2: "CCITT 1D",
@@ -89,7 +98,7 @@ def get_tiff_info(img: Image.Image) -> Dict[str, Any]:
                 }
                 comp_value = tags[259][0]
                 info['compression'] = compression_codes.get(comp_value, f"Unknown ({comp_value})")
-            if 262 in tags:  # PhotometricInterpretation
+            if 262 in tags:
                 photo_codes = {
                     0: "WhiteIsZero",
                     1: "BlackIsZero",
@@ -102,11 +111,11 @@ def get_tiff_info(img: Image.Image) -> Dict[str, Any]:
                 }
                 photo_value = tags[262][0]
                 info['photometric'] = photo_codes.get(photo_value, f"Unknown ({photo_value})")
-            if 296 in tags:  # ResolutionUnit
+            if 296 in tags:
                 unit_codes = {1: "None", 2: "Inches", 3: "Centimeters"}
                 unit_value = tags[296][0]
                 info['resolution_unit'] = unit_codes.get(unit_value, f"Unknown ({unit_value})")
-            if 282 in tags and 283 in tags:  # XResolution and YResolution
+            if 282 in tags and 283 in tags:
                 info['dpi'] = (float(tags[282][0][0]) / float(tags[282][0][1]),
                                float(tags[283][0][0]) / float(tags[283][0][1]))
     except Exception as e:
@@ -117,7 +126,18 @@ def get_tiff_info(img: Image.Image) -> Dict[str, Any]:
 def compute_luminance(img_array: np.ndarray) -> np.ndarray:
     """
     Compute the luminance of an image array.
-    If the image has 3 channels, compute a weighted sum; otherwise, return the array.
+    
+    For an RGB image, the luminance is computed using:
+    
+        Luminance = 0.2989 × Red + 0.5870 × Green + 0.1140 × Blue
+    
+    These coefficients come from the ITU-R BT.601 standard and are used because
+    the human eye is more sensitive to green, moderately to red, and least to blue.
+    For a single-channel image, the original array is returned.
+    
+    Sources:
+      - ITU-R BT.601 Standard: https://en.wikipedia.org/wiki/Rec._601
+      - Wikipedia: YUV: https://en.wikipedia.org/wiki/YUV
     """
     if img_array.ndim == 3 and img_array.shape[2] >= 3:
         return 0.2989 * img_array[:, :, 0] + 0.5870 * img_array[:, :, 1] + 0.1140 * img_array[:, :, 2]
@@ -125,12 +145,17 @@ def compute_luminance(img_array: np.ndarray) -> np.ndarray:
 
 def detect_glitches(luminance: np.ndarray, axis: int, use_dynamic: bool = False) -> Dict[str, Any]:
     """
-    Generic glitch detection function along a specified axis.
+    Detect glitches (abnormal changes in brightness) along the specified axis.
     
-    :param luminance: 2D array of image luminance.
-    :param axis: Axis along which to detect glitches (0 for rows, 1 for columns).
-    :param use_dynamic: If True, use dynamic threshold computation.
-    :return: Dictionary containing glitch detection results.
+    :param luminance: 2D array representing the image's luminance.
+    :param axis: 0 to detect horizontal glitches (rows), 1 for vertical glitches (columns).
+    :param use_dynamic: If True, use dynamic thresholding; otherwise, use fixed thresholds.
+    
+    The function compares differences between adjacent rows or columns with a threshold.
+    If a sufficient percentage of pixels exceed the threshold, that row/column is flagged.
+    Consecutive flagged rows/columns are grouped into a glitch region.
+    
+    This step isolates areas of the image where the brightness changes unexpectedly.
     """
     key_name = "lines" if axis == 0 else "columns"
     glitch_info: Dict[str, Any] = {
@@ -222,6 +247,8 @@ def detect_glitches(luminance: np.ndarray, axis: int, use_dynamic: bool = False)
 def detect_horizontal_glitches(img_array: np.ndarray, use_dynamic: bool = False) -> Dict[str, Any]:
     """
     Detect horizontal glitches (along rows).
+    
+    Converts the image to grayscale and calls detect_glitches with axis=0.
     """
     luminance = compute_luminance(img_array)
     return detect_glitches(luminance, axis=0, use_dynamic=use_dynamic)
@@ -229,19 +256,32 @@ def detect_horizontal_glitches(img_array: np.ndarray, use_dynamic: bool = False)
 def detect_vertical_glitches(img_array: np.ndarray, use_dynamic: bool = False) -> Dict[str, Any]:
     """
     Detect vertical glitches (along columns).
+    
+    Converts the image to grayscale and calls detect_glitches with axis=1.
     """
     luminance = compute_luminance(img_array)
     return detect_glitches(luminance, axis=1, use_dynamic=use_dynamic)
 
 def analyze_corruption_pattern(img_array: np.ndarray, glitch_lines: List[Tuple[int, int]], orientation: str = 'horizontal') -> Dict[str, Any]:
     """
-    Improved analysis of corruption patterns to determine the probable origin.
+    Analyze the detected glitch regions to determine the probable origin of the corruption.
     
     This function extracts additional features:
       - Glitch center positions and widths,
       - Mean and standard deviation of glitch intensities,
-      - A measure of periodicity using autocorrelation of glitch positions,
-    and uses these features in a heuristic classification.
+      - A measure of periodicity using autocorrelation of glitch positions.
+    
+    Heuristic classification:
+      - **Buffer Corruption:** If glitches are highly periodic (autocorrelation > 0.8), narrow (width ≤ MAX_ALIGNMENT_DIFF), and have a mean intensity above the overall image mean, it suggests a buffering/caching error.
+      - **Memory Corruption:** If glitches are very dark (low mean intensity) with little variation, it may indicate memory corruption.
+      - **Write Corruption:** Otherwise, the glitches are attributed to errors during file writing or data transfer.
+    
+    Debug information is added to help fine-tune parameters.
+    
+    Sources:
+      - ITU-R BT.601 for luminance conversion.
+      - Fundamentals of autocorrelation and signal periodicity in [Digital Signal Processing](https://en.wikipedia.org/wiki/Digital_signal_processing).
+      - Concepts from "Digital Image Processing" by Gonzalez & Woods.
     """
     pattern_info: Dict[str, Any] = {
         'type': 'unknown',
@@ -251,7 +291,6 @@ def analyze_corruption_pattern(img_array: np.ndarray, glitch_lines: List[Tuple[i
     }
     
     try:
-        # Compute luminance; if vertical analysis, transpose the array.
         luminance = compute_luminance(img_array)
         if orientation == 'vertical':
             luminance = luminance.T
@@ -279,7 +318,7 @@ def analyze_corruption_pattern(img_array: np.ndarray, glitch_lines: List[Tuple[i
         else:
             periodicity = 0
         
-        # Determine if glitches are narrow (aligned) using MAX_ALIGNMENT_DIFF
+        # Determine if glitches are narrow (well-aligned)
         narrow_glitches = all(width <= MAX_ALIGNMENT_DIFF for width in glitch_widths)
         
         # Add debug details
@@ -288,15 +327,9 @@ def analyze_corruption_pattern(img_array: np.ndarray, glitch_lines: List[Tuple[i
         pattern_info['details'].append(f"Periodicity (autocorrelation at lag 1): {periodicity:.2f}")
         pattern_info['details'].append(f"Glitches are narrow: {narrow_glitches}")
         
-        # Compute the overall mean of the luminance for comparison
         overall_mean = np.mean(luminance)
         
-        # Heuristic classification:
-        # - If periodicity is high (> 0.8), glitches are narrow, and the mean intensity is above the overall mean,
-        #   then classify as "buffer_corruption".
-        # - If the mean glitch intensity is very low (< 20) and the standard deviation is low (< 10),
-        #   then classify as "memory_corruption".
-        # - Otherwise, classify as "write_corruption".
+        # Heuristic classification
         if periodicity > 0.8 and narrow_glitches and mean_glitch_intensity > overall_mean:
             pattern_info['type'] = 'buffer_corruption'
             pattern_info['confidence'] = 0.85
@@ -318,11 +351,15 @@ def analyze_corruption_pattern(img_array: np.ndarray, glitch_lines: List[Tuple[i
 
 def analyze_tiff(file_path: str, use_dynamic: bool) -> Dict[str, Any]:
     """
-    Analyze a TIFF image and check for signs of corruption.
+    Perform a complete analysis of a TIFF image.
+    
+    This function verifies the file, extracts metadata, converts the image to a NumPy array,
+    detects horizontal and vertical glitches, computes pixel statistics, and analyzes glitch patterns.
+    All results are compiled into a dictionary.
     
     :param file_path: Path to the TIFF file.
     :param use_dynamic: If True, use dynamic threshold computation.
-    :return: Dictionary containing analysis results.
+    :return: Dictionary containing the analysis results.
     """
     results: Dict[str, Any] = {
         'valid': False,
@@ -392,6 +429,8 @@ def analyze_tiff(file_path: str, use_dynamic: bool) -> Dict[str, Any]:
                         'min': float(np.min(img_array)),
                         'max': float(np.max(img_array))
                     }
+                    # Save the image array in the results for further use (e.g., creating heatmaps)
+                    results['img_array'] = img_array
         except UnidentifiedImageError as e:
             results['errors'].append(f"Image load error: {str(e)}")
             logger.error("Image load error: %s", e)
@@ -419,7 +458,7 @@ def analyze_tiff(file_path: str, use_dynamic: bool) -> Dict[str, Any]:
 
 def print_analysis_results(results: Dict[str, Any]) -> None:
     """
-    Display the analysis results in a formatted manner.
+    Display the analysis report in a formatted, human-readable manner.
     """
     print("\n=== TIFF Analysis Report ===")
     print(f"Overall validity: {'✓' if results['valid'] else '✗'}")
@@ -508,12 +547,87 @@ def print_analysis_results(results: Dict[str, Any]) -> None:
         for error in results['errors']:
             print(f"- {error}")
 
-def print_header() -> None:
-    """Prints the program header."""
-    print("\n" + "=" * 50)
-    print("{:^50}".format("TIFF Data Analysis"))
-    print("{:^50}".format("by Yan Senez"))
-    print("=" * 50 + "\n")
+import os
+import platform
+import matplotlib.pyplot as plt
+
+def open_file(filepath: str) -> None:
+    """
+    Open a file using the default application based on the OS.
+    """
+    system = platform.system()
+    try:
+        if system == 'Darwin':  # macOS
+            os.system(f'open "{filepath}"')
+        elif system == 'Windows':
+            os.startfile(filepath)
+        else:  # Assume Linux or other Unix
+            os.system(f'xdg-open "{filepath}"')
+    except Exception as e:
+        print(f"Could not open file {filepath}: {e}")
+
+def create_heatmap(results: Dict[str, Any], img_array: np.ndarray) -> None:
+    """
+    Create and save heatmaps of detected glitches.
+    
+    For vertical glitches:
+      - A mask is created by marking the glitch column ranges.
+      - This mask is overlaid on the grayscale version of the image.
+    
+    For horizontal glitches:
+      - A mask is created by marking the glitch row ranges.
+      - This mask is overlaid on the grayscale image.
+    
+    The heatmaps are saved as 'vertical_glitches_heatmap.png' and 'horizontal_glitches_heatmap.png'.
+    After saving, the function attempts to open the saved heatmap files automatically.
+    """
+    # Convert image to grayscale for visualization
+    gray_img = compute_luminance(img_array)
+    
+    # Improve figure readability: set a larger figure size and use a descriptive colormap.
+    figsize = (12, 10)
+    
+    # Create vertical glitches heatmap if detected
+    if results.get('vertical_glitch_info') and results['vertical_glitch_info'].get('detected'):
+        mask_vert = np.zeros_like(gray_img)
+        for (start, end) in results['vertical_glitch_info']['columns']:
+            mask_vert[:, start:end+1] = 1  # Mark glitch columns
+        
+        plt.figure(figsize=figsize)
+        plt.imshow(gray_img, cmap='gray')
+        # Use a colormap like 'hot' or 'viridis' to highlight glitches
+        plt.imshow(mask_vert, cmap='viridis', alpha=0.95)
+        plt.title('Vertical Glitches Heatmap')
+        plt.xlabel('Columns')
+        plt.ylabel('Rows')
+        cbar = plt.colorbar(label='Glitch Presence')
+        plt.tight_layout()
+        vert_filename = 'vertical_glitches_heatmap.png'
+        plt.savefig(vert_filename, dpi=150)
+        plt.close()
+        logger.info(f"Vertical glitches heatmap saved as '{vert_filename}'.")
+        open_file(vert_filename)
+    
+    # Create horizontal glitches heatmap if detected
+    if results.get('horizontal_glitch_info') and results['horizontal_glitch_info'].get('detected'):
+        mask_horiz = np.zeros_like(gray_img)
+        for (start, end) in results['horizontal_glitch_info']['lines']:
+            mask_horiz[start:end+1, :] = 1  # Mark glitch rows
+        
+        plt.figure(figsize=figsize)
+        plt.imshow(gray_img, cmap='gray')
+        plt.imshow(mask_horiz, cmap='viridis', alpha=0.95)
+        plt.title('Horizontal Glitches Heatmap')
+        plt.xlabel('Columns')
+        plt.ylabel('Rows')
+        cbar = plt.colorbar(label='Glitch Presence')
+        plt.tight_layout()
+        horiz_filename = 'horizontal_glitches_heatmap.png'
+        plt.savefig(horiz_filename, dpi=150)
+        plt.close()
+        logger.info(f"Horizontal glitches heatmap saved as '{horiz_filename}'.")
+        open_file(horiz_filename)
+
 
 def main() -> None:
     global BASE_THRESHOLD_FACTOR, LOCAL_THRESHOLD_STD_FACTOR, ANOMALY_RATIO_THRESHOLD
@@ -562,10 +676,18 @@ def main() -> None:
     REPEATED_PATTERN_RATIO = args.repeated_pattern_ratio
     CLUSTER_GAP_THRESHOLD = args.cluster_gap_threshold
 
-    print_header()
+    print("\n" + "="*50)
+    print("{:^50}".format("TIFF Data Analysis"))
+    print("{:^50}".format("by Yan Senez"))
+    print("="*50 + "\n")
+    
     file_path = args.file
     results = analyze_tiff(file_path, use_dynamic=args.dynamic)
     print_analysis_results(results)
+    
+    # If the analysis contains an image array and glitches were detected, create heatmaps.
+    if 'img_array' in results and results.get('vertical_glitch_info', {}).get('detected'):
+        create_heatmap(results, results['img_array'])
 
 if __name__ == "__main__":
     main()
