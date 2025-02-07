@@ -1,25 +1,27 @@
-# TIFF Experimental Analysis Tool
+# TIFF Analysis Tool
 
 TIFF Analysis Tool is a Python-based application designed to detect and analyze glitches (unexpected anomalies or corruptions) in TIFF images. The tool extracts metadata, computes pixel brightness (luminance), detects abnormal changes (glitches) along rows and columns, groups these anomalies, and then uses a series of heuristics to suggest the probable origin of the corruption.
+
+## Project Background & Future Direction
+This tool was initially developed to help a client sort through a large batch of TIFF files that had suffered from corruption issues during their development process in Capture One. While solving this specific problem, the project evolved into a personal exploration of file structure analysis and corruption detection.
+
+The project is now being expanded with two main objectives:
+- Providing a deeper understanding of image file structures
+- Extending the analysis capabilities to RAW file formats
 
 ---
 
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Function-by-Function Explanation with Sources](#function-by-function-explanation-with-sources)
-   - [get_tiff_info](#get_tiff_info)
-   - [compute_luminance](#compute_luminance)
-   - [compute_dynamic_thresholds](#compute_dynamic_thresholds)
-   - [detect_glitches](#detect_glitches)
-   - [detect_horizontal_glitches & detect_vertical_glitches](#detect_horizontal_glitches--detect_vertical_glitches)
-   - [analyze_corruption_pattern](#analyze_corruption_pattern)
-   - [analyze_tiff](#analyze_tiff)
-   - [print_analysis_results](#print_analysis_results)
-   - [main](#main)
-3. [Glitch Identification Strategies and Heuristics](#glitch-identification-strategies-and-heuristics)
+2. [Interfaces](#interfaces)
+   - [Command Line Interface](#command-line-interface)
+   - [Graphical User Interface](#graphical-user-interface)
+3. [Function-by-Function Explanation with Sources](#function-by-function-explanation-with-sources)
 4. [Usage](#usage)
-5. [Conclusion](#conclusion)
+5. [Parameters and Settings](#parameters-and-settings)
+6. [Installation](#installation)
+7. [Requirements](#requirements)
 
 ---
 
@@ -33,10 +35,38 @@ The tool processes a TIFF image in several stages:
 4. **Grouping:** Groups consecutive anomalies into glitch regions.
 5. **Pattern Analysis:** Extracts features from these regions (such as intensity, periodicity, and alignment) and uses heuristics to classify the type of corruption.
 6. **Reporting:** Produces a detailed report including all findings and debug information.
+7. **Visualization:** (GUI only) Provides heatmap visualization of detected glitches.
 
 ---
 
-## Function-by-Function Explanation
+## Interfaces
+
+### Command Line Interface
+The traditional command-line interface offers full control over analysis parameters and is ideal for batch processing or automation.
+
+```bash
+python3 analyse_tiff.py image.tiff [options]
+```
+
+### Graphical User Interface
+The new GUI provides an intuitive interface with real-time visualization and interactive controls:
+
+**Features:**
+- Interactive file selection
+- Real-time analysis progress
+- Adjustable transparency heatmaps
+- Tabbed interface for results and visualizations
+- Timestamped reports
+- Dynamic parameter adjustment
+
+**To launch the GUI:**
+```bash
+./analyse.sh --gui
+```
+
+---
+
+## Function-by-Function Explanation with Sources
 
 ### get_tiff_info
 
@@ -78,7 +108,7 @@ Working in grayscale simplifies further analysis by reducing the data from three
 ### compute_dynamic_thresholds
 
 **Purpose:**  
-Calculates thresholds for glitch detection dynamically based on the image’s local statistics.
+Calculates thresholds for glitch detection dynamically based on the image's local statistics.
 
 **Logic:**  
 - Computes the absolute differences between adjacent rows (or columns).
@@ -150,54 +180,45 @@ By combining these features, the tool provides a probable explanation for the de
 
 ---
 
-### analyze_tiff
+## Usage
 
-**Purpose:**  
-Conducts a full analysis of the TIFF image.
+### Command Line Mode
+```bash
+# Basic analysis
+./analyse.sh input.tiff
 
-**Logic:**  
-- Verifies file existence and header validity.
-- Loads the image and extracts metadata.
-- Converts the image to an array and computes pixel statistics.
-- Detects horizontal and vertical glitches.
-- Analyzes glitch patterns to infer the probable cause.
-- Compiles all results into a comprehensive report.
+# Analysis with dynamic thresholds
+./analyse.sh input.tiff --dynamic
 
-**Significance:**  
-This function ties together all individual analyses and provides a complete picture of the image’s condition.
+# Analysis with custom parameters
+./analyse.sh input.tiff --base-threshold-factor 0.2 --max-group-size 30
+```
 
----
+### GUI Mode
+1. Launch the GUI:
+```bash
+./analyse.sh --gui
+```
 
-### print_analysis_results
+2. Use the interface:
+   - Click "Select TIFF File" to choose an image
+   - Adjust analysis parameters if needed
+   - Click "Analyze" to start processing
+   - Use the tabs to view:
+     - Text report
+     - Horizontal glitch heatmap
+     - Vertical glitch heatmap
+   - Adjust heatmap transparency using the slider
 
-**Purpose:**  
-Prints the analysis report in an organized, human-readable format.
+## Parameters and Settings
 
-**Logic:**  
-- Displays overall image validity, metadata, glitch detection results (including number and positions of glitches), pixel statistics, and the results of the corruption pattern analysis.
-- Lists any errors encountered during processing.
+### GUI Settings
+- **Dynamic Threshold:** Enables automatic threshold computation
+- **Base Threshold Factor:** Base factor for glitch detection (0.0 - 1.0)
+- **Max Group Size:** Maximum size of glitch groups (1 - 100)
+- **Heatmap Transparency:** Adjustable visualization opacity (0% - 100%)
 
-**Significance:**  
-A clear report helps users understand the state of the image and identify potential problems.
-
----
-
-### main
-
-**Purpose:**  
-Serves as the entry point of the script.
-
-**Logic:**  
-- Uses the `argparse` module to parse command-line arguments (including the TIFF file path and optional parameters such as `--dynamic`).
-- Updates global threshold parameters based on user input.
-- Calls `analyze_tiff` and then `print_analysis_results` to perform and display the full analysis.
-
-**Significance:**  
-This function makes the tool user-friendly and configurable via the command line.
-
----
-## Complete List of Additional Parameters
-Here is the list of additional command line options and their functions:
+### Command Line Parameters
 
 - **`file`**
 **Description:** Path to the TIFF file to analyze.
@@ -219,118 +240,75 @@ Here is the list of additional command line options and their functions:
 **Example:** `--anomaly-ratio-threshold 0.45`
 
 - **`--significance-multiplier`**
-**Description:** Multiplier applied to standard deviation (fixed or dynamic) to judge significance of an anomaly.
+**Description:** Multiplier applied to standard deviation to judge significance of an anomaly.
 **Default value:** 2.0
 **Example:** `--significance-multiplier 1.8`
 
 - **`--group-severity-multiplier`**
-**Description:** Multiplier used to determine if a group of glitches has sufficient intensity to be considered significant.
+**Description:** Multiplier for group significance determination.
 **Default value:** 3.0
 **Example:** `--group-severity-multiplier 2.5`
 
 - **`--max-group-size`**
-**Description:** Maximum size (in number of lines or columns) that a group of glitches can have to be considered valid.
+**Description:** Maximum size for a valid glitch group.
 **Default value:** 20
 **Example:** `--max-group-size 30`
 
 - **`--min-group-length`**
-**Description:** Minimum length (number of consecutive lines/columns) required for a group to be considered a glitch.
+**Description:** Minimum length required for a valid glitch group.
 **Default value:** 2
 **Example:** `--min-group-length 3`
 
 - **`--max-alignment-diff`**
-**Description:** Maximum difference between start and end of a glitch for it to be considered "narrow" and thus well-aligned.
+**Description:** Maximum difference for well-aligned glitch consideration.
 **Default value:** 5
 **Example:** `--max-alignment-diff 4`
 
-- **`--regularity-threshold`**
-**Description:** Threshold for measuring glitch regularity (periodicity) via autocorrelation.
-**Default value:** 0.7
-**Example:** `--regularity-threshold 0.75`
-
-- **`--repeated-pattern-ratio`**
-**Description:** Ratio used to estimate value repetitiveness in glitch areas.
-**Default value:** 0.1
-**Example:** `--repeated-pattern-ratio 0.12`
-
-- **`--cluster-gap-threshold`**
-**Description:** Maximum allowed gap between two glitch clusters to consider them as belonging to the same group.
-**Default value:** 0.05
-**Example:** `--cluster-gap-threshold 0.04`
-
 - **`--dynamic`**
-**Description:** Activates dynamic threshold mode, which calculates thresholds from local image statistics instead of using fixed values.
+**Description:** Activates dynamic threshold mode
 **Type:** Flag (no value needed)
 **Example:** `--dynamic`
 
----
+## Installation
 
-## Glitch Identification Strategies and Heuristics
-
-1. **Threshold-Based Detection:**
-   - **Fixed Thresholds:**  
-     Uses overall image brightness statistics (mean and standard deviation) with fixed multipliers.
-   - **Dynamic Thresholds:**  
-     Calculates thresholds based on the local distribution of pixel differences (e.g., using the 90th or 80th percentile).  
-     *Source:* Adaptive thresholding techniques in image processing literature.
-  
-2. **Anomaly Grouping:**  
-   Groups consecutive rows or columns that exceed the threshold, considering a group as a “glitch region.” This helps filter out noise.
-  
-3. **Feature Extraction:**
-   - **Glitch Positions & Widths:**  
-     Identifies where glitches occur and their extent. Narrow glitches (small width) are considered well-aligned.
-   - **Glitch Intensity:**  
-     Measures the average brightness within a glitch. Brighter glitches compared to the overall mean can indicate buffer issues.
-   - **Periodicity:**  
-     Uses autocorrelation to assess if glitches occur at regular intervals. Regularity (high autocorrelation) suggests systematic errors such as buffer corruption.
-     *Source:* Fundamentals of autocorrelation in signal processing.
-  
-4. **Heuristic Classification:**
-   - **Buffer Corruption:**  
-     Suggested when glitches are narrow, occur periodically (high autocorrelation), and are brighter than the overall image. This may be due to a repeating error in data buffering.
-   - **Memory Corruption:**  
-     Suspected when glitch regions are very dark (low intensity) with little variation, indicating that pixel data may have been lost.
-   - **Write Corruption:**  
-     Applied as a default when neither of the above conditions is clearly met, suggesting errors during file writing or transfer.
-   *Source:* Observations from digital imaging error analysis (see *Digital Image Processing* by Gonzalez and Woods).
-
----
-
-## Usage
-
-### Direct Execution
-
-To run the script directly:
+1. Clone the repository:
 ```bash
-python3 analyse_tiff.py image.tiff
-```
-For dynamic thresholding:
-```
-python3 analyse_tiff.py image.tiff --dynamic
-```
-Additional parameters (e.g., --max-group-size 30) can be passed as needed:
-```
-python3 analyse_tiff.py image.tiff --dynamic --max-group-size 30
+git clone [repository-url]
 ```
 
-### Using the Bash Wrapper
-
-A Bash wrapper script (e.g., run_analysis.sh) is provided to simplify environment setup:
-
-**Make it executable:**
-```
-chmod +x run_analysis.sh
+2. Install dependencies:
+```bash
+./analyse.sh --gui  # Will automatically set up the virtual environment and install dependencies
 ```
 
-**Run it with the TIFF file:**
-```
-    ./run_analysis.sh image.tiff --dynamic
-```
+## Requirements
 
-Extra parameters are passed directly to the Python script.
+### Core Dependencies
+- Python 3.8+
+- NumPy
+- Pillow
+- SciPy
+- Matplotlib
 
+### GUI Dependencies
+- PyQt6
+- Matplotlib
+- tqdm
 
-This TIFF Analysis Tool employs a series of methods—from metadata extraction and luminance computation to glitch detection and pattern analysis—to diagnose potential corruption in images. The tool uses both fixed and dynamic threshold strategies and leverages features such as glitch intensity, periodicity, and alignment to heuristically classify the origin of the corruption. 
+All dependencies are automatically installed when using `analyse.sh`.
 
-Feel free to experiment with the parameters and review the debug output to better understand how the tool works with your images.
+---
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+---
+
+## Author
+
+Yan Senez - Initial work
