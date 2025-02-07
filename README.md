@@ -196,6 +196,75 @@ Serves as the entry point of the script.
 This function makes the tool user-friendly and configurable via the command line.
 
 ---
+## Complete List of Additional Parameters
+Here is the list of additional command line options and their functions:
+
+- **`file`**
+**Description:** Path to the TIFF file to analyze.
+**Example:** `image.tiff`
+
+- **`--base-threshold-factor`**
+**Description:** Factor used to calculate the base threshold in fixed mode.
+**Default value:** 0.15
+**Example:** `--base-threshold-factor 0.2`
+
+- **`--local-threshold-std-factor`**
+**Description:** Factor applied to local standard deviation to adjust threshold in fixed mode.
+**Default value:** 0.5
+**Example:** `--local-threshold-std-factor 0.4`
+
+- **`--anomaly-ratio-threshold`**
+**Description:** Minimum percentage of pixels exceeding threshold to consider a line/column as anomalous.
+**Default value:** 0.4
+**Example:** `--anomaly-ratio-threshold 0.45`
+
+- **`--significance-multiplier`**
+**Description:** Multiplier applied to standard deviation (fixed or dynamic) to judge significance of an anomaly.
+**Default value:** 2.0
+**Example:** `--significance-multiplier 1.8`
+
+- **`--group-severity-multiplier`**
+**Description:** Multiplier used to determine if a group of glitches has sufficient intensity to be considered significant.
+**Default value:** 3.0
+**Example:** `--group-severity-multiplier 2.5`
+
+- **`--max-group-size`**
+**Description:** Maximum size (in number of lines or columns) that a group of glitches can have to be considered valid.
+**Default value:** 20
+**Example:** `--max-group-size 30`
+
+- **`--min-group-length`**
+**Description:** Minimum length (number of consecutive lines/columns) required for a group to be considered a glitch.
+**Default value:** 2
+**Example:** `--min-group-length 3`
+
+- **`--max-alignment-diff`**
+**Description:** Maximum difference between start and end of a glitch for it to be considered "narrow" and thus well-aligned.
+**Default value:** 5
+**Example:** `--max-alignment-diff 4`
+
+- **`--regularity-threshold`**
+**Description:** Threshold for measuring glitch regularity (periodicity) via autocorrelation.
+**Default value:** 0.7
+**Example:** `--regularity-threshold 0.75`
+
+- **`--repeated-pattern-ratio`**
+**Description:** Ratio used to estimate value repetitiveness in glitch areas.
+**Default value:** 0.1
+**Example:** `--repeated-pattern-ratio 0.12`
+
+- **`--cluster-gap-threshold`**
+**Description:** Maximum allowed gap between two glitch clusters to consider them as belonging to the same group.
+**Default value:** 0.05
+**Example:** `--cluster-gap-threshold 0.04`
+
+- **`--dynamic`**
+**Description:** Activates dynamic threshold mode, which calculates thresholds from local image statistics instead of using fixed values.
+**Type:** Flag (no value needed)
+**Example:** `--dynamic`
+
+---
+---
 
 ## Glitch Identification Strategies and Heuristics
 
@@ -236,3 +305,33 @@ This function makes the tool user-friendly and configurable via the command line
 To run the script directly:
 ```bash
 python3 analyse_tiff.py image.tiff
+```
+For dynamic thresholding:
+```
+python3 analyse_tiff.py image.tiff --dynamic
+```
+Additional parameters (e.g., --max-group-size 30) can be passed as needed:
+```
+python3 analyse_tiff.py image.tiff --dynamic --max-group-size 30
+```
+
+### Using the Bash Wrapper
+
+A Bash wrapper script (e.g., run_analysis.sh) is provided to simplify environment setup:
+
+**Make it executable:**
+```
+chmod +x run_analysis.sh
+```
+
+**Run it with the TIFF file:**
+```
+    ./run_analysis.sh image.tiff --dynamic
+```
+
+Extra parameters are passed directly to the Python script.
+
+
+This TIFF Analysis Tool employs a series of methods—from metadata extraction and luminance computation to glitch detection and pattern analysis—to diagnose potential corruption in images. The tool uses both fixed and dynamic threshold strategies and leverages features such as glitch intensity, periodicity, and alignment to heuristically classify the origin of the corruption. 
+
+Feel free to experiment with the parameters and review the debug output to better understand how the tool works with your images.
