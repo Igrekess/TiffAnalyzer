@@ -1,8 +1,10 @@
+<img src="TiffAnalyzerLogo.png" alt="Tiff Analyzer logo" width="95"/>
+
 # Work In Progress
 
-# TIFF Analysis Tool
+# TIFF Analyzer
 
-TIFF Analysis Tool is a Python-based application designed to detect and analyze glitches (unexpected anomalies or corruptions) in TIFF images. The tool extracts metadata, computes pixel brightness (luminance), detects abnormal changes (glitches) along rows and columns, groups these anomalies, and then uses a series of heuristics to suggest the probable origin of the corruption.
+TIFF Analyzer is a Python-based application designed to detect and analyze glitches (unexpected anomalies or corruptions) in TIFF images. The tool extracts metadata, computes pixel brightness (luminance), detects abnormal changes (glitches) along rows and columns, groups these anomalies, and then uses a series of heuristics to suggest the probable origin of the corruption.
 
 ## Project Background & Future Direction
 This tool was initially developed to help a client sort through a large batch of TIFF files that had suffered from corruption issues during their development process in Capture One. While solving this specific problem, the project evolved into a personal exploration of file structure analysis and corruption detection.
