@@ -276,7 +276,7 @@ By combining these features, the tool provides a probable explanation for the de
 
 1. Clone the repository:
 ```bash
-git clone [repository-url]
+git clone https://github.com/Igrekess/TiffAnalyzer
 ```
 
 2. Install dependencies:
