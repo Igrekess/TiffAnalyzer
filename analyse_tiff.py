@@ -16,6 +16,8 @@ from PIL import Image, ImageFile, UnidentifiedImageError
 import numpy as np
 from tqdm import tqdm
 from typing import Dict, Any, Tuple, List
+import platform
+import matplotlib.pyplot as plt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -547,9 +549,6 @@ def print_analysis_results(results: Dict[str, Any]) -> None:
         for error in results['errors']:
             print(f"- {error}")
 
-import os
-import platform
-import matplotlib.pyplot as plt
 
 def open_file(filepath: str) -> None:
     """
